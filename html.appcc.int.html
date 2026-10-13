@@ -49,7 +49,7 @@ return{install,init,isStandalone:standalone};})();</script>
 <body>
 <header class="top"><img class="mark appcc-symbol" src="./icon-appcc-pcc-192.png?v=1" alt="Símbolo APPCC" width="72" height="72"><div><h1>Guia Estadual de Avaliação do Risco — APPCC</h1><p>Envasadoras de água mineral natural e água natural · Rio de Janeiro</p><span class="version-tag">REVISÃO LEGISLATIVA</span></div></header>
 <div class="workspace">
-<div class="toolbar"><a class="button secondary" href="./html.appc.html?v=1">← Menu do guia</a><button onclick="exportFile()">↓ Salvar JSON</button><label class="button secondary">↑ Abrir JSON<input type="file" id="importFile" accept=".json,application/json" hidden></label><button type="button" class="secondary" data-team-open>Trabalho em equipe</button><button onclick="printGuide()">▤ Imprimir / PDF</button><button class="secondary" onclick="newGuide()">Novo guia</button><button class="install" id="installButton" data-pwa-install onclick="window.AppccPWA.install()">＋ Instalar no celular</button></div>
+<div class="toolbar"><a class="button secondary" href="./html.appc.html?v=1">← Menu do guia</a><button onclick="exportFile()">↓ Salvar JSON</button><label class="button secondary">↑ Abrir JSON<input type="file" id="importFile" accept=".json,application/json" hidden></label><button type="button" class="secondary" data-team-open onclick="show('team')">Trabalho em equipe</button><button onclick="printGuide()">▤ Imprimir / PDF</button><button class="secondary" onclick="newGuide()">Novo guia</button><button class="install" id="installButton" data-pwa-install onclick="window.AppccPWA.install()">＋ Instalar no celular</button></div>
 <p class="status" data-pwa-status role="status" aria-live="polite"></p><p id="saveStatus" class="status" role="status" aria-live="polite"></p>
 <span id="offlineStatus" class="offline">Arquivo independente · preenchimento neste aparelho</span>
 <section class="card identification"><div class="fields"><label>Envasadora<textarea id="meta-co" class="header-text" rows="2" autocomplete="organization"></textarea></label><label>Endereço<textarea id="meta-ad" class="header-text" rows="2" autocomplete="street-address"></textarea></label><label>Data<input id="meta-dt" type="date"></label><label>Tipo<select id="meta-ty"><option>Inspeção</option><option>Reinspeção</option><option>Teste de desenvolvimento</option></select></label></div><p id="globalRisk" class="global-risk"></p></section>
@@ -4154,15 +4154,15 @@ function syncHead(){for(const k of ['co','ad','dt','ty']){const el=document.getE
 function riskBadge(r){const cls=r==='Baixo'||r==='SIM'?'low':r==='Alto'||r==='NÃO'?'high':r==='Médio'?'med':'neutral';return '<span class="badge '+cls+'">'+e(r)+'</span>';}
 function refreshSummary(){const el=document.getElementById('globalRisk');if(el&&S)el.innerHTML='Risco do estabelecimento: '+riskBadge(est());}
 function nav(){return '<div class="nav-label">AVALIAÇÃO DOS PROCESSOS</div>'+TABLE.map(g=>'<button type="button" class="nav-button '+(active===g.id?'selected':'')+'" onclick="show(\''+g.id+'\')">'+e(processNumber(procBy[g.id])+' · '+g.name.replace(/^4\.\d+ - /,''))+'</button>').join('')+'<div class="nav-label">REGISTROS E DESENVOLVIMENTO</div>'+[['obs','Observações e documentos legais'],['photos','Fotos'],['labels','Rótulos'],['matrix','Matriz de risco'],['actions','Ações e responsáveis'],['team','Trabalho em equipe'],['support','Documentos de apoio'],['appcc','Classificação e pesos APPCC'],['review','Revisão das frases e referências'],['pcc','Considerandos dos PCC'],['laws','Legislação e versão do guia']].map(([k,n])=>'<button class="nav-button '+(active===k?'selected':'')+'" onclick="show(\''+k+'\')">'+n+'</button>').join('');}
-function show(k){active=k;document.getElementById('navigation').innerHTML=nav();document.body.classList.remove('menu-open');render();document.getElementById('main').focus({preventScroll:true});window.scrollTo({top:0,behavior:'instant'});}
-function render(){
+function show(k){active=k;document.getElementById('navigation').innerHTML=nav();document.body.classList.remove('menu-open');document.getElementById('mobileMenu').setAttribute('aria-expanded','false');render(false);const main=document.getElementById('main');main.focus({preventScroll:true});requestAnimationFrame(()=>main.scrollIntoView({block:'start',behavior:'instant'}));}
+function render(preserveScroll=true){
  const main=document.getElementById('main');if(!main)return;
  const y=window.scrollY;
  if(GRUPOS[active])main.innerHTML=renderGroup(active);
  else main.innerHTML=({obs:renderObs,photos:()=>renderPhotos(false),labels:()=>renderPhotos(true),matrix:renderMatrix,actions:renderActions,team:renderTeam,support:renderSupportConfig,appcc:renderAPPCC,review:renderReview,pcc:renderPCC,laws:renderLaws}[active]||renderMatrix)();
  document.getElementById('navigation').innerHTML=nav();refreshSummary();
  document.querySelectorAll('textarea:not(.header-text)').forEach(t=>{t.style.height='auto';t.style.height=Math.min(650,Math.max(t.classList.contains('large')?190:92,t.scrollHeight))+'px';});
- requestAnimationFrame(()=>window.scrollTo(0,y));
+ if(preserveScroll)requestAnimationFrame(()=>window.scrollTo(0,y));
 }
 function field(label,value,handler,kind='text'){return '<label>'+e(label)+'<input type="'+kind+'" value="'+e(value)+'" oninput="'+handler+'"></label>';}
 function textArea(label,value,handler,large=false){return '<label>'+e(label)+'<textarea class="'+(large?'large':'')+'" oninput="'+handler+';this.style.height=\'auto\';this.style.height=Math.max(90,this.scrollHeight)+\'px\'">'+e(value)+'</textarea></label>';}
@@ -4426,4 +4426,4 @@ if(document.readyState==='complete')launchGuidePrint();else window.addEventListe
 w.document.close();
 }
 </script>
-<script>document.querySelectorAll('[data-team-open]').forEach(button=>button.addEventListener('click',event=>{event.preventDefault();show('team');}));</script></body></html>
+</body></html>
