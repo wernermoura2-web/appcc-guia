@@ -135,4 +135,35 @@
  byId('pdfImport').addEventListener('change',async e=>{await importFile(e.target.files[0]);e.target.value='';});
  byId('pdfPrevious').addEventListener('click',()=>{if(documentPDF&&pageNo>1){pageNo--;void render();}});byId('pdfNext').addEventListener('click',()=>{if(documentPDF&&pageNo<22){pageNo++;void render();}});byId('pdfPage').addEventListener('change',e=>{if(documentPDF){pageNo=Number(e.target.value);void render();}});
  byId('pdfZoom').addEventListener('change',e=>{if(documentPDF){byId('pdfPaper').style.width=(Number(e.target.value)*100)+'%';void render();}});
+
+ // Backup periódico separado da gravação imediata dos campos.
+ const backupBar=document.createElement('section');backupBar.className='card';backupBar.id='pdfBackup';
+ backupBar.innerHTML='<h3>Cópia de segurança automática</h3><label>Intervalo: <input id="pdfBackupMinutes" type="number" min="0.1" max="1440" step="any" style="width:85px"> minutos</label> <button id="pdfBackupNow">Criar cópia agora</button> <button id="pdfBackupRecover">Recuperar preenchimento</button><p id="pdfBackupStatus" role="status"></p><small>Cópias neste navegador, com respostas, fotos e rótulos. Padrão: 5 minutos. Escolha tempos menores ou maiores. Use Salvar JSON para guardar também fora do aparelho. O navegador pode adiar o backup em segundo plano.</small>';
+ byId('pdfEditor').insertBefore(backupBar,byId('pdfEditor').children[1]);
+ let backupDB,backupBusy=false,backupTimer,backupMinutes=5;
+ const backupInput=byId('pdfBackupMinutes'),backupMessage=t=>byId('pdfBackupStatus').textContent=t,backupSetting='appcc-pdf-backup-minutes';
+ try{const n=Number(localStorage.getItem(backupSetting));if(n>=.1&&n<=1440)backupMinutes=n;}catch(e){}
+ backupInput.value=backupMinutes;
+ function backupRequest(fn){return new Promise((resolve,reject)=>{const tx=backupDB.transaction('copies','readwrite'),r=fn(tx.objectStore('copies'));let result;r.onsuccess=()=>result=r.result;tx.oncomplete=()=>resolve(result);tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error);});}
+ async function createBackup(){
+  if(!metadata){backupMessage('Abra o PDF do guia para iniciar o backup.');return;}
+  if(!backupDB||backupBusy||busy)return;backupBusy=true;
+  try{const body=JSON.parse(JSON.stringify({format:'guia-appcc-pdf',version,values,photos})),at=new Date().toISOString(),name=values.identificacao_ENVASADORA||'Inspeção sem nome',date=values.identificacao_DATA||'',id=JSON.stringify([name,date]);
+   await backupRequest(s=>s.put({id,at,label:name,body}));backupMessage('Cópia salva neste aparelho em '+new Date(at).toLocaleString('pt-BR')+'.');
+  }catch(e){backupMessage('Não foi possível criar a cópia. Use Salvar JSON.');}finally{backupBusy=false;}
+ }
+ function scheduleBackup(){clearInterval(backupTimer);backupTimer=setInterval(createBackup,backupMinutes*60000);}
+ backupInput.onchange=()=>{const n=Number(backupInput.value);if(!Number.isFinite(n)||n<.1||n>1440){backupInput.value=backupMinutes;return;}backupMinutes=n;try{localStorage.setItem(backupSetting,String(n));}catch(e){}scheduleBackup();backupMessage('Backup configurado a cada '+n+' minuto(s).');};
+ byId('pdfBackupNow').onclick=createBackup;
+ byId('pdfBackupRecover').onclick=async()=>{
+  if(!backupDB){backupMessage('Recuperação indisponível. Abra seu JSON salvo.');return;}
+  try{const rows=(await backupRequest(s=>s.getAll())).sort((a,b)=>b.at.localeCompare(a.at)),dialog=document.createElement('dialog'),title=document.createElement('h2');title.textContent='Recuperar preenchimento do PDF';dialog.append(title);
+   if(!rows.length){const p=document.createElement('p');p.textContent='Nenhuma cópia disponível neste navegador.';dialog.append(p);}
+   for(const row of rows){const p=document.createElement('p'),button=document.createElement('button');button.textContent=row.label+' — '+new Date(row.at).toLocaleString('pt-BR');button.onclick=async()=>{if(!confirm('Substituir o preenchimento aberto por esta cópia? Salve o JSON atual se precisar preservá-lo.'))return;await createBackup();await importFile(new File([JSON.stringify(row.body)],'Recuperacao_PDF.json',{type:'application/json'}));dialog.close();dialog.remove();};p.append(button);dialog.append(p);}
+   const close=document.createElement('button');close.textContent='Fechar';close.onclick=()=>{dialog.close();dialog.remove();};dialog.append(close);document.body.append(dialog);dialog.showModal();
+  }catch(e){backupMessage('Não foi possível consultar as cópias. Use seu JSON salvo.');}
+ };
+ try{const dbOpen=indexedDB.open('appcc-pdf-backups',1);dbOpen.onupgradeneeded=()=>dbOpen.result.createObjectStore('copies',{keyPath:'id'});dbOpen.onsuccess=async()=>{backupDB=dbOpen.result;const rows=await backupRequest(s=>s.getAll());backupMessage(rows.length?'Há '+rows.length+' preenchimento(s) anterior(es). Toque em Recuperar preenchimento.':'Recuperação automática disponível neste aparelho.');scheduleBackup();};dbOpen.onerror=()=>backupMessage('Backup indisponível. Use Salvar JSON.');}catch(e){backupMessage('Backup indisponível. Use Salvar JSON.');}
+ document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'&&metadata)createBackup();});
+
 })();
