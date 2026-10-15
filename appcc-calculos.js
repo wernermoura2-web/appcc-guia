@@ -14,9 +14,9 @@ function AppccCalculate(config, values) {
    var item=g.items[ii],v=answer(item.answer),cl=raw(item.classField),classes=cl&&cl!=='Por frase'&&cl.indexOf('Original:')!==0?[cl]:item.classes;
    var nc=0;for(var ci=0;ci<classes.length;ci++)nc=Math.max(nc,(config.ncLevels||{PC:1,PPR:2,PPHO:3,PPRO:4,PCC:5})[classes[ci]]||0);
    var prob=number(raw(item.probabilityField)),valid=prob!==null&&prob>=1&&prob<=5&&Math.floor(prob)===prob;
-   var phraseRows=[];try{phraseRows=JSON.parse(raw(item.phraseField)||'[]');}catch(e){}
+   disabled[item.answer]=true;var phraseRows=[];try{phraseRows=JSON.parse(raw(item.phraseField)||'[]');}catch(e){}
    var phraseScore=null,hasPhrase=false,phrasePending=false,anyNo=false,allNA=true;
-   for(var fj=0;fj<(item.phrases||[]).length;fj++)if(phraseRows[fj]&&phraseRows[fj].v)hasPhrase=true;
+   hasPhrase=phraseRows.length>0;
    if(hasPhrase){
     var scored=[];
     for(var fj=0;fj<item.phrases.length;fj++){
@@ -65,6 +65,18 @@ function AppccCalculate(config, values) {
  output.p1_vazao_total=count?String(Math.round(sum*1000)/1000).replace('.',','):'';
  for(var j=0;j<8;j++){var field='legal_'+j+'_atende';disabled[field]=raw('legal_'+j+'_situacao')!=='Entregue';if(disabled[field])output[field]='Off';}
  for(var j=0;j<config.mirrors.length;j++){var mirror=config.mirrors[j];output[mirror.target]=raw(mirror.source);}
+
+ for(var pn in (config.phraseNotesFields||{})){
+  var noteFields=config.phraseNotesFields[pn],notes=[];
+  for(var ng=0;ng<config.groups.length;ng++)if(config.groups[ng].page===Number(pn)){
+   var group=config.groups[ng];
+   for(var ni=0;ni<group.items.length;ni++){
+    var it=group.items[ni],prs=[];try{prs=JSON.parse(raw(it.phraseField)||'[]');}catch(e){}
+    for(var nj=0;nj<prs.length;nj++)if(prs[nj]&&String(prs[nj].obs||'').replace(/\s/g,''))notes.push('Indicador '+it.serial+' / grupo '+group.label+' / frase '+(nj+1)+': '+prs[nj].obs);
+   }
+  }
+  if(noteFields.length){var field=noteFields[0],manual=raw(field).split('\n\n[OBSERVAÇÕES POR FRASE]')[0];output[field]=manual+(notes.length?'\n\n[OBSERVAÇÕES POR FRASE]\n'+notes.join('\n\n'):'');}
+ }
  return {values:output,disabled:disabled,groups:results,risk:plant};
 }
 if(typeof module!=='undefined'&&module.exports)module.exports=AppccCalculate;
