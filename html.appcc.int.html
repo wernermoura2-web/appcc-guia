@@ -4426,4 +4426,38 @@ if(document.readyState==='complete')launchGuidePrint();else window.addEventListe
 w.document.close();
 }
 </script>
+
+<script>
+(function(){
+const bar=document.createElement('section');bar.className='card';bar.id='backup-appcc';bar.style.margin='12px';
+bar.innerHTML='<b>Cópia de segurança automática</b> <label>Intervalo: <input id="backup-minutes" type="number" min="0.1" max="1440" step="any" style="width:85px"> minutos</label> <button id="backup-now">Criar cópia agora</button> <button id="backup-recover">Recuperar preenchimento</button><p id="backup-message" role="status"></p><small>As cópias incluem respostas, fotos e rótulos e ficam neste navegador. Use Salvar arquivo para guardar um JSON fora do aparelho. O navegador pode adiar o backup em segundo plano.</small>';
+document.body.append(bar);
+const style=document.createElement('style');style.textContent='@media print{#backup-appcc{display:none!important}}';document.head.append(style);
+const input=bar.querySelector('input'),msg=bar.querySelector('#backup-message'),key='appcc-backup-minutes';
+let minutes=5,db,timer,busy=false;
+try{const n=Number(localStorage.getItem(key));if(n>=.1&&n<=1440)minutes=n;}catch(e){}
+input.value=minutes;
+function report(t){msg.textContent=t;}
+function request(fn){return new Promise((resolve,reject)=>{const tx=db.transaction('copies','readwrite'),r=fn(tx.objectStore('copies'));let result;r.onsuccess=()=>result=r.result;tx.oncomplete=()=>resolve(result);tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error);});}
+async function backup(){if(!db||busy||!S||storageConflict)return;busy=true;try{
+const body=JSON.parse(JSON.stringify(S)),id=body.team?.inspectionId||'principal',at=new Date().toISOString();
+await request(store=>store.put({id,at,label:body.m?.co||'Inspeção sem nome',body}));
+report('Cópia salva neste aparelho em '+new Date(at).toLocaleString('pt-BR')+'.');
+}catch(e){report('Não foi possível criar a cópia. Use Salvar arquivo (JSON).');}finally{busy=false;}}
+function schedule(){clearInterval(timer);timer=setInterval(backup,minutes*60000);}
+input.onchange=()=>{const n=Number(input.value);if(!Number.isFinite(n)||n<.1||n>1440){input.value=minutes;return;}minutes=n;try{localStorage.setItem(key,String(n));}catch(e){}schedule();report('Intervalo definido: '+n+' minuto(s).');};
+bar.querySelector('#backup-now').onclick=backup;
+bar.querySelector('#backup-recover').onclick=async()=>{if(!db)return;try{
+const rows=(await request(store=>store.getAll())).sort((a,b)=>b.at.localeCompare(a.at));
+const dialog=document.createElement('dialog'),title=document.createElement('h2');title.textContent='Recuperar preenchimento';dialog.append(title);
+if(!rows.length){const p=document.createElement('p');p.textContent='Nenhuma cópia disponível neste aparelho.';dialog.append(p);}
+for(const row of rows){const p=document.createElement('p'),button=document.createElement('button');button.textContent=row.label+' — '+new Date(row.at).toLocaleString('pt-BR');button.onclick=async()=>{if(!confirm('Substituir o preenchimento atual por esta cópia?'))return;try{
+const next=validateState(row.body);await backup();S=next;TEAM.sequence++;TEAM.preview=null;TEAM.queue=[];TEAM.busy=false;TEAM.error='';storageConflict=false;opened.clear();flushSave();syncHead();render();report('Preenchimento recuperado.');dialog.close();dialog.remove();
+}catch(e){report('Não foi possível recuperar: '+e.message);}};p.append(button);dialog.append(p);}
+const close=document.createElement('button');close.textContent='Fechar';close.onclick=()=>{dialog.close();dialog.remove();};dialog.append(close);document.body.append(dialog);dialog.showModal();
+}catch(e){report('Não foi possível consultar as cópias.');}};
+try{const open=indexedDB.open('appcc-guia-backups',1);open.onupgradeneeded=()=>open.result.createObjectStore('copies',{keyPath:'id'});open.onsuccess=async()=>{db=open.result;const rows=await request(store=>store.getAll());report(rows.length?'Há '+rows.length+' preenchimento(s) anterior(es). Toque em Recuperar preenchimento.':'Recuperação automática disponível neste aparelho. Padrão: 5 minutos.');schedule();};open.onerror=()=>report('Backup indisponível. Use Salvar arquivo (JSON).');}catch(e){report('Backup indisponível. Use Salvar arquivo (JSON).');}
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')backup();});
+})();
+</script>
 </body></html>
