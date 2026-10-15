@@ -24,14 +24,14 @@ function AppccCalculate(config, values) {
      if(fv==='NA'&&def.na)continue;allNA=false;if(fv==='NÃO')anyNo=true;
      var fp=fr.p===undefined||fr.p===''?prob:number(fr.p),fnc=(config.ncLevels||{})[def.cls]||0;
      if(!fv||fp===null||fp<1||fp>5||Math.floor(fp)!==fp)phrasePending=true;
-     scored.push({v:fv,w:fnc*(fp||0)});
+     scored.push({v:fv,w:fnc*(fp||0),nc:fnc});
     }
     v=allNA?'NA':anyNo?'NÃO':phrasePending?'':'SIM';
-    phraseScore=0;for(var fj=0;fj<scored.length;fj++)if(scored[fj].v===(v==='NÃO'?'NÃO':'SIM'))phraseScore=Math.max(phraseScore,scored[fj].w);
+    phraseScore=0;var phraseNC=nc;for(var fj=0;fj<scored.length;fj++)if(scored[fj].v===(v==='NÃO'?'NÃO':'SIM')&&scored[fj].w>=phraseScore){phraseScore=scored[fj].w;phraseNC=scored[fj].nc;}
     values[item.answer]=v;output[item.answer]=v;
    }
 
-   output[item.ncField]=String(nc);output[item.weightField]=valid?String(nc*prob):'';
+   output[item.ncField]=String(nc);if(item.unitNcField)output[item.unitNcField]=hasPhrase?String(phraseNC):String(nc);output[item.weightField]=valid?String(nc*prob):'';
    if(v)used=true;if(v==='NA')continue;
    if(!v||(hasPhrase?phrasePending:!valid))pending=true;items.push({v:v,w:hasPhrase?phraseScore:valid?nc*prob:0});
   }

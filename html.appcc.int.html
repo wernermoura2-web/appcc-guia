@@ -3722,7 +3722,7 @@ const ESTABLISHMENT_GROUPS=[
 function classificationRows(r=est()){
  return '<div class="classification-options" role="radiogroup" aria-label="Classificação automática do estabelecimento">'+ESTABLISHMENT_GROUPS.map(g=>'<div class="classification-option" role="radio" aria-checked="'+(r===g.risk)+'"><span class="classification-circle '+(r===g.risk?'checked':'')+'" aria-hidden="true"></span>'+e(g.text)+'</div>').join('')+'</div>';
 }
-function riskLevelAt(p,band){return band===0?1:X.P[p].strict?(band===1?2:3):band===1?1:band===2?2:3;}
+function riskLevelAt(p,band){return [1,1,2,3][band];}
 function riskScaleTable(){
  const codes=Object.keys(X.P),ranges=['100%','76 - 99%','51 - 75%','0 - 50%'];
  return '<table class="matrix risk-top risk-scale-table"><colgroup><col style="width:4%"><col style="width:8%">'+codes.map(()=>'<col style="width:9%">').join('')+'<col style="width:16%"></colgroup>'+ranges.map((range,j)=>'<tr>'+(j===0?'<th rowspan="4" class="attendance-label">ATENDIMENTO</th>':'')+'<th>'+range+'</th>'+codes.map(p=>{const level=riskLevelAt(p,j);return '<td class="'+['','low','med','high'][level]+'">'+['','1 BAIXO','2 MÉDIO','3 ALTO'][level]+'</td>';}).join('')+'<td class="'+['low','low','med','high'][j]+'">'+['1 BAIXO','1 BAIXO','2 MÉDIO','3 ALTO'][j]+'</td></tr>').join('')+'<tr><th colspan="2"></th><th colspan="8">RISCO DOS 8 PROCESSOS CRÍTICOS</th><th>RISCO DO ESTABELECIMENTO</th></tr></table>';
@@ -3736,7 +3736,7 @@ window.addEventListener('message',event=>{
 });
 
 const NOVOS={},GRUPOS={},X={P:{}};
-for(const [p,n] of Object.entries(PROCESS_NAMES))X.P[p]={n,it:[],strict:['4.2','4.3','4.5','4.6'].includes(p)};
+for(const [p,n] of Object.entries(PROCESS_NAMES))X.P[p]={n,it:[],strict:false};
 for(const g of TABLE){GRUPOS[g.id]=g;for(const it of g.items){const p=procBy[g.id],code=p+'.'+g.id+'.'+it.number;NOVOS[code]={...it,p,code,gid:g.id,type:typeBy[g.id]||''};X.P[p].it.push(code);}}
 const LEGAL_NAMES=['Licença sanitária vigente','Licença sanitária dos veículos da envasadora','Licença ambiental / operação','Portaria de lavra ou concessão ANM','Outorga de poço de serviço do INEA e último laudo de potabilidade','Comunicado de Início de Fabricação de Produto Dispensado de Registro','Registro de marca no INPI e/ou rótulos','Manual de Boas Práticas de Fabricação (BPF)'];
 const PCC_TEMPLATE='Considerando que o item {item}, do processo {processo}, classificado como PCC, apresentou resultado INSATISFATÓRIO: {foco}.';

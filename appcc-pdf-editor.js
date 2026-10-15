@@ -1,7 +1,7 @@
 /* PDF de 22 páginas: edição local, cálculo compartilhado e exportação AcroForm. */
 (function(){
  'use strict';
- const key='appcc-pdf-revisao-v1',version=15;
+ const key='appcc-pdf-revisao-v1',version=16;
  let metadata,bytes,templateBytes,documentPDF,pdfjs,renderTask,values={},photos={},pageNo=1,renderSerial=0,busy=false;
  const byId=id=>document.getElementById(id),msg=t=>byId('pdfStatus').textContent=t;
  const titles=['Captação','Condução','Reservatórios da captação 1','Reservatórios da captação 2','Reservatórios da captação 3','Reservatórios da captação 4','Recepção','Higienização de retornáveis','Higienização de descartáveis','Envase de retornáveis','Envase de descartáveis','Controle de qualidade','Responsabilidade','Observações gerais','Documentos legais','Fotos','Fotos — continuação','Matriz de risco','Ações e responsáveis','Rótulos','Rótulos — continuação','Rótulos — continuação'];
@@ -21,7 +21,7 @@
   byId('pdfGlobalRisk').textContent='Risco do estabelecimento: '+result.risk;
  }
  function label(n){
-  for(const g of metadata.config.groups)for(const i of g.items){if(i.answer===n)return 'Indicador '+i.serial+' — '+titles[g.page-1]+' — grupo '+g.label;if(i.classField===n)return 'APPCC do indicador '+i.serial;if(i.weightField===n)return 'NC × P do indicador '+i.serial;if(i.probabilityField===n)return 'Probabilidade (1 a 5) do indicador '+i.serial;if(i.ncField===n)return 'Criticidade do indicador '+i.serial;}
+  for(const g of metadata.config.groups)for(const i of g.items){if(i.answer===n)return 'Indicador '+i.serial+' — '+titles[g.page-1]+' — grupo '+g.label;if(i.classField===n)return 'APPCC do indicador '+i.serial;if(i.weightField===n)return 'NC × P do indicador '+i.serial;if(i.probabilityField===n)return 'Probabilidade (1 a 5) do indicador '+i.serial;if(i.ncField===n)return 'Criticidade do indicador '+i.serial;if(i.unitNcField===n)return 'NC do indicador '+i.serial+' — grupo '+g.label;}
   const names={identificacao_ENVASADORA:'Envasadora',identificacao_ENDEREÇO:'Endereço',identificacao_DATA:'Data',p1_vazao_total:'Vazão total das captações',p18_risco_estabelecimento:'Risco do estabelecimento',p19_classificacao:'Classificação automática',p19_classificacao_automatica:'Grupo do estabelecimento'};
   if(names[n])return names[n];
   if(/^p1_fonte_/.test(n))return 'Fonte da captação '+n.split('_').pop();
@@ -42,7 +42,7 @@
   const layer=byId('pdfFields');layer.replaceChildren();
   for(const widget of metadata.widgets.filter(w=>w.page===pageNo)){
    const n=widget.name,flags=widget.flags,rect=widget.rect,media=metadata.config.media.find(m=>m.name===n);
-   if(media){const control=mediaControl(media);position(control,rect,vp);layer.append(control);continue;}if(widget.phraseAnswer){const control=document.createElement('button');control.type='button';control.textContent='F';control.title=widget.label;control.onclick=()=>editPhrases(widget.phraseAnswer);position(control,rect,vp);control.style.position='absolute';control.style.padding='0';control.style.fontSize='7px';layer.append(control);continue;}
+   if(media){const control=mediaControl(media);position(control,rect,vp);layer.append(control);continue;}if(widget.phraseAnswer){const control=document.createElement('button');control.type='button';control.textContent='F';control.title=widget.label;control.onclick=()=>editPhrases(widget.phraseAnswer);position(control,rect,vp);control.style.position='absolute';control.style.padding='0';control.style.fontSize='calc(var(--pdf-scale) * 5px)';control.style.minHeight='0';control.style.minWidth='0';control.style.maxHeight='none';control.style.margin='0';control.style.lineHeight='1';control.style.boxSizing='border-box';control.style.borderRadius='1px';control.style.border='1px solid #63869b';control.style.overflow='hidden';control.setAttribute('aria-label',widget.label);layer.append(control);continue;}
    let el;
    if(widget.type==='/Btn'){el=document.createElement('input');el.type='radio';el.name=n;el.value=widget.radio;el.setAttribute('aria-label',label(n)+' — '+({'NAO':'NÃO','POCO':'Poço','SURGENCIA':'Surgência'}[widget.radio]||widget.radio));}
     else if(widget.type==='/Ch'){el=document.createElement('select');for(const option of widget.options){const o=document.createElement('option');o.value=option;o.textContent=option;if(option==='Por frase'){const classes=[];for(const g of metadata.config.groups)for(const item of g.items)if(item.classField===n)for(const cls of item.classes)if(!classes.includes(cls))classes.push(cls);o.textContent='Original: '+classes.join(' / ');}el.append(o);}}
@@ -83,9 +83,9 @@
   if(busy)return;busy=true;byId('pdfEditor').hidden=false;byId('pdfEditor').inert=true;msg('Abrindo o PDF editável…');
   try{
    if(!metadata){
-    const [meta,pdf,library]=await Promise.all([fetch('./pdf-appcc-campos.json?v=15').then(r=>{if(!r.ok)throw Error('Não foi possível abrir os campos do PDF.');return r.json();}),fetch('./Guia_APPCC_22_Paginas.pdf?v=15').then(r=>{if(!r.ok)throw Error('Não foi possível abrir o PDF.');return r.arrayBuffer();}),import('./pdfjs-appcc.mjs?v=15')]);
-    metadata=meta;bytes=new Uint8Array(pdf);templateBytes=bytes.slice();pdfjs=library;pdfjs.GlobalWorkerOptions.workerSrc='./pdfjs-appcc.worker.mjs?v=15';values={...meta.defaults};
-    try{const saved=JSON.parse(localStorage.getItem(key));if(saved?.format==='guia-appcc-pdf'&&[14,version].includes(saved.version)){for(const n of Object.keys(values))if(typeof saved.values?.[n]==='string')values[n]=saved.values[n];photos=validPhotos(saved.photos);}}catch(e){}
+    const [meta,pdf,library]=await Promise.all([fetch('./pdf-appcc-campos.json?v=16').then(r=>{if(!r.ok)throw Error('Não foi possível abrir os campos do PDF.');return r.json();}),fetch('./Guia_APPCC_22_Paginas.pdf?v=16').then(r=>{if(!r.ok)throw Error('Não foi possível abrir o PDF.');return r.arrayBuffer();}),import('./pdfjs-appcc.mjs?v=16')]);
+    metadata=meta;bytes=new Uint8Array(pdf);templateBytes=bytes.slice();pdfjs=library;pdfjs.GlobalWorkerOptions.workerSrc='./pdfjs-appcc.worker.mjs?v=16';values={...meta.defaults};
+    try{const saved=JSON.parse(localStorage.getItem(key));if(saved?.format==='guia-appcc-pdf'&&[14,15,version].includes(saved.version)){for(const n of Object.keys(values))if(typeof saved.values?.[n]==='string')values[n]=saved.values[n];photos=validPhotos(saved.photos);}}catch(e){}
     documentPDF=await pdfjs.getDocument({data:bytes.slice(),isEvalSupported:false}).promise;update();
     byId('pdfPage').replaceChildren(...titles.map((t,i)=>{const o=document.createElement('option');o.value=String(i+1);o.textContent=(i+1)+' · '+t;return o;}));
    }
@@ -137,7 +137,7 @@
     if(!saved)saved={format:'guia-appcc-pdf',version,values:{},photos:{}};const f=doc.getForm();if(doc.getPageCount()!==22||!f.getFieldMaybe('p1_vazao_total')||!f.getFieldMaybe('foto_48_imagem'))throw Error('Abra um PDF editável desta revisão.');for(const field of f.getFields()){const n=field.getName();if(!(n in values))continue;let v='';if(field instanceof PDFLib.PDFTextField)v=field.getText()||'';if(field instanceof PDFLib.PDFDropdown)v=field.getSelected()[0]||'';if(field instanceof PDFLib.PDFRadioGroup)v=field.getSelected()||'Off';saved.values[n]=v;}
     incomingPdf=await pdfjs.getDocument({data:content.slice(),isEvalSupported:false}).promise;incomingBytes=content;saved.photos=await recoverImages(incomingPdf,f,saved);
    }else saved=JSON.parse(await file.text());
-   if(saved?.format!=='guia-appcc-pdf'||![14,version].includes(saved.version)||!saved.values)throw Error('Use um JSON ou PDF deste guia PDF editável.');
+   if(saved?.format!=='guia-appcc-pdf'||![14,15,version].includes(saved.version)||!saved.values)throw Error('Use um JSON ou PDF deste guia PDF editável.');
    if(!incomingPdf){incomingBytes=templateBytes.slice();incomingPdf=await pdfjs.getDocument({data:incomingBytes.slice(),isEvalSupported:false}).promise;}
    values={...metadata.defaults};for(const n of Object.keys(values))if(typeof saved.values[n]==='string')values[n]=saved.values[n];photos=validPhotos(saved.photos);if(incomingPdf){const previous=documentPDF;if(renderTask){renderTask.cancel();renderTask=null;}renderSerial++;documentPDF=incomingPdf;bytes=incomingBytes;if(previous&&previous!==incomingPdf)previous.destroy().catch(()=>{});}update();persist();await render();msg('Preenchimento aberto. Respostas, cálculos e imagens foram recuperados.');
   }catch(e){msg('O arquivo não foi aberto: '+e.message);}
