@@ -1,14 +1,14 @@
 /* PDF de 22 páginas: edição local, cálculo compartilhado e exportação AcroForm. */
 (function(){
  'use strict';
- const key='appcc-pdf-revisao-v1',version=14;
+ const key='appcc-pdf-revisao-v1',version=15;
  let metadata,bytes,templateBytes,documentPDF,pdfjs,renderTask,values={},photos={},pageNo=1,renderSerial=0,busy=false;
  const byId=id=>document.getElementById(id),msg=t=>byId('pdfStatus').textContent=t;
  const titles=['Captação','Condução','Reservatórios da captação 1','Reservatórios da captação 2','Reservatórios da captação 3','Reservatórios da captação 4','Recepção','Higienização de retornáveis','Higienização de descartáveis','Envase de retornáveis','Envase de descartáveis','Controle de qualidade','Responsabilidade','Observações gerais','Documentos legais','Fotos','Fotos — continuação','Matriz de risco','Ações e responsáveis','Rótulos','Rótulos — continuação','Rótulos — continuação'];
  const download=(name,data,type)=>{const u=URL.createObjectURL(new Blob([data],{type})),a=document.createElement('a');a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),30000);};
  function persist(){try{localStorage.setItem(key,JSON.stringify({format:'guia-appcc-pdf',version,values,photos}));msg('Preenchimento salvo neste aparelho. Guarde uma cópia em JSON ou PDF.');}catch(e){msg('O preenchimento está aberto, mas a memória local está cheia. Use Salvar JSON para guardar sua cópia.');}}
  function update(name,value){
-  if(name){values[name]=value;for(const links of Object.values(metadata.config.classes))for(const pair of links)for(let k=0;k<2;k++)if(pair[k]===name)for(const other of links)values[other[k]]=value;}
+  if(name){values[name]=value;for(const g of metadata.config.groups)for(const i of g.items)if(i.answer===name)values[i.phraseField]=JSON.stringify(i.phrases.map(f=>({v:value==='NA'&&!f.na?'':value})));for(const links of Object.values(metadata.config.classes))for(const pair of links)for(let k=0;k<2;k++)if(pair[k]===name)for(const other of links)values[other[k]]=value;}
   const result=AppccCalculate(metadata.config,values);Object.assign(values,result.values);
   for(const el of byId('pdfFields').querySelectorAll('[data-field]')){
    const n=el.dataset.field,v=String(values[n]||'').replace(/^\//,'');
@@ -21,7 +21,7 @@
   byId('pdfGlobalRisk').textContent='Risco do estabelecimento: '+result.risk;
  }
  function label(n){
-  for(const g of metadata.config.groups)for(const i of g.items){if(i.answer===n)return 'Indicador '+i.serial+' — '+titles[g.page-1]+' — grupo '+g.label;if(i.classField===n)return 'APPCC do indicador '+i.serial;if(i.weightField===n)return 'Peso (%) do indicador '+i.serial+' — vazio usa o original';}
+  for(const g of metadata.config.groups)for(const i of g.items){if(i.answer===n)return 'Indicador '+i.serial+' — '+titles[g.page-1]+' — grupo '+g.label;if(i.classField===n)return 'APPCC do indicador '+i.serial;if(i.weightField===n)return 'NC × P do indicador '+i.serial;if(i.probabilityField===n)return 'Probabilidade (1 a 5) do indicador '+i.serial;if(i.ncField===n)return 'Criticidade do indicador '+i.serial;}
   const names={identificacao_ENVASADORA:'Envasadora',identificacao_ENDEREÇO:'Endereço',identificacao_DATA:'Data',p1_vazao_total:'Vazão total das captações',p18_risco_estabelecimento:'Risco do estabelecimento',p19_classificacao:'Classificação automática',p19_classificacao_automatica:'Grupo do estabelecimento'};
   if(names[n])return names[n];
   if(/^p1_fonte_/.test(n))return 'Fonte da captação '+n.split('_').pop();
@@ -42,16 +42,28 @@
   const layer=byId('pdfFields');layer.replaceChildren();
   for(const widget of metadata.widgets.filter(w=>w.page===pageNo)){
    const n=widget.name,flags=widget.flags,rect=widget.rect,media=metadata.config.media.find(m=>m.name===n);
-   if(media){const control=mediaControl(media);position(control,rect,vp);layer.append(control);continue;}
+   if(media){const control=mediaControl(media);position(control,rect,vp);layer.append(control);continue;}if(widget.phraseAnswer){const control=document.createElement('button');control.type='button';control.textContent='F';control.title=widget.label;control.onclick=()=>editPhrases(widget.phraseAnswer);position(control,rect,vp);control.style.position='absolute';control.style.padding='0';control.style.fontSize='7px';layer.append(control);continue;}
    let el;
    if(widget.type==='/Btn'){el=document.createElement('input');el.type='radio';el.name=n;el.value=widget.radio;el.setAttribute('aria-label',label(n)+' — '+({'NAO':'NÃO','POCO':'Poço','SURGENCIA':'Surgência'}[widget.radio]||widget.radio));}
     else if(widget.type==='/Ch'){el=document.createElement('select');for(const option of widget.options){const o=document.createElement('option');o.value=option;o.textContent=option;if(option==='Por frase'){const classes=[];for(const g of metadata.config.groups)for(const item of g.items)if(item.classField===n)for(const cls of item.classes)if(!classes.includes(cls))classes.push(cls);o.textContent='Original: '+classes.join(' / ');}el.append(o);}}
-   else{el=document.createElement(flags&4096?'textarea':'input');if(el.tagName==='INPUT')el.type='text';el.setAttribute('aria-label',label(n));if(/_peso$/.test(n)){el.placeholder='Peso % · auto';el.inputMode='decimal';}if(n==='identificacao_DATA')el.placeholder='dd/mm/aaaa';}
+   else{el=document.createElement(flags&4096?'textarea':'input');if(el.tagName==='INPUT')el.type='text';el.setAttribute('aria-label',label(n));if(/_probabilidade$/.test(n)){el.type='number';el.min='1';el.max='5';el.step='1';el.placeholder='P';}if(/_criticidade$/.test(n))el.title='Criticidade NC';if(n==='identificacao_DATA')el.placeholder='dd/mm/aaaa';}
    if(!el.hasAttribute('aria-label'))el.setAttribute('aria-label',label(n));el.title=el.getAttribute('aria-label');el.classList.add('pdf-field');el.dataset.field=n;
    el.style.fontSize='calc(var(--pdf-scale) * '+Math.min(8,(rect[3]-rect[1])*.65)+'px)';position(el,rect,vp);
-   el.addEventListener(el.type==='radio'||el.tagName==='SELECT'?'change':'input',()=>{if(/_peso$/.test(n)&&el.value!==''&&(!Number.isFinite(Number(el.value.replace(',','.')))||Number(el.value.replace(',','.'))<0||Number(el.value.replace(',','.'))>100)){el.setCustomValidity('Use peso entre 0 e 100.');el.reportValidity();return;}el.setCustomValidity('');update(n,el.value);persist();});layer.append(el);
+   el.addEventListener(el.type==='radio'||el.tagName==='SELECT'?'change':'input',()=>{if(/_probabilidade$/.test(n)&&el.value!==''&&(!Number.isFinite(Number(el.value.replace(',','.')))||!Number.isInteger(Number(el.value))||Number(el.value)<1||Number(el.value)>5)){el.setCustomValidity('Use probabilidade inteira de 1 a 5.');el.reportValidity();return;}el.setCustomValidity('');update(n,el.value);persist();});layer.append(el);
   }
   update();byId('pdfPrevious').disabled=pageNo===1;byId('pdfNext').disabled=pageNo===22;
+ }
+ function editPhrases(answerName){
+ const item=metadata.config.groups.flatMap(g=>g.items).find(i=>i.answer===answerName);if(!item)return;
+ let rows=[];try{rows=JSON.parse(values[item.phraseField]||'[]');}catch(e){}
+ const dialog=document.createElement('dialog'),title=document.createElement('h2');title.textContent='Indicador '+item.serial+' — frases';dialog.append(title);dialog.style.maxWidth='700px';dialog.style.maxHeight='85vh';dialog.style.overflow='auto';const controls=[];
+ for(const [j,f] of item.phrases.entries()){
+ const box=document.createElement('section'),text=document.createElement('p');text.textContent=(j+1)+'. '+f.text;box.append(text);
+ const label=document.createElement('p');label.textContent=f.cls+' · NC '+metadata.config.ncLevels[f.cls];box.append(label);
+ const select=document.createElement('select');select.setAttribute('aria-label','Resposta da frase '+(j+1));for(const v of ['', 'SIM','NÃO',...(f.na?['NA']:[])]){const o=document.createElement('option');o.value=v;o.textContent=v||'Pendente';select.append(o);}select.value=rows[j]?.v||'';
+ const probability=document.createElement('input');probability.type='number';probability.min='1';probability.max='5';probability.step='1';probability.placeholder='P do item: '+values[item.probabilityField];probability.setAttribute('aria-label','Probabilidade da frase '+(j+1));probability.value=rows[j]?.p??'';box.append(select,probability);dialog.append(box);controls.push({select,probability});
+ }
+ const save=document.createElement('button');save.textContent='Salvar frases';save.onclick=()=>{if(controls.some(c=>c.probability.value!==''&&(!Number.isInteger(Number(c.probability.value))||Number(c.probability.value)<1||Number(c.probability.value)>5))){msg('Use probabilidades inteiras de 1 a 5.');return;}values[item.phraseField]=JSON.stringify(controls.map(c=>({v:c.select.value,p:c.probability.value})));update();persist();dialog.close();dialog.remove();};const cancel=document.createElement('button');cancel.textContent='Cancelar';cancel.onclick=()=>{dialog.close();dialog.remove();};dialog.append(save,cancel);document.body.append(dialog);dialog.showModal();
  }
  async function convertImage(file,rotation=0){
   if(!file||file.size>20*1024*1024||!/^image\/(jpeg|png|webp)$/.test(file.type))throw Error('Escolha uma imagem JPG, PNG ou WebP de até 20 MB.');
@@ -71,13 +83,13 @@
   if(busy)return;busy=true;byId('pdfEditor').hidden=false;byId('pdfEditor').inert=true;msg('Abrindo o PDF editável…');
   try{
    if(!metadata){
-    const [meta,pdf,library]=await Promise.all([fetch('./pdf-appcc-campos.json?v=14').then(r=>{if(!r.ok)throw Error('Não foi possível abrir os campos do PDF.');return r.json();}),fetch('./Guia_APPCC_22_Paginas.pdf?v=14').then(r=>{if(!r.ok)throw Error('Não foi possível abrir o PDF.');return r.arrayBuffer();}),import('./pdfjs-appcc.mjs?v=14')]);
-    metadata=meta;bytes=new Uint8Array(pdf);templateBytes=bytes.slice();pdfjs=library;pdfjs.GlobalWorkerOptions.workerSrc='./pdfjs-appcc.worker.mjs?v=14';values={...meta.defaults};
-    try{const saved=JSON.parse(localStorage.getItem(key));if(saved?.format==='guia-appcc-pdf'&&saved.version===version){for(const n of Object.keys(values))if(typeof saved.values?.[n]==='string')values[n]=saved.values[n];photos=validPhotos(saved.photos);}}catch(e){}
+    const [meta,pdf,library]=await Promise.all([fetch('./pdf-appcc-campos.json?v=15').then(r=>{if(!r.ok)throw Error('Não foi possível abrir os campos do PDF.');return r.json();}),fetch('./Guia_APPCC_22_Paginas.pdf?v=15').then(r=>{if(!r.ok)throw Error('Não foi possível abrir o PDF.');return r.arrayBuffer();}),import('./pdfjs-appcc.mjs?v=15')]);
+    metadata=meta;bytes=new Uint8Array(pdf);templateBytes=bytes.slice();pdfjs=library;pdfjs.GlobalWorkerOptions.workerSrc='./pdfjs-appcc.worker.mjs?v=15';values={...meta.defaults};
+    try{const saved=JSON.parse(localStorage.getItem(key));if(saved?.format==='guia-appcc-pdf'&&[14,version].includes(saved.version)){for(const n of Object.keys(values))if(typeof saved.values?.[n]==='string')values[n]=saved.values[n];photos=validPhotos(saved.photos);}}catch(e){}
     documentPDF=await pdfjs.getDocument({data:bytes.slice(),isEvalSupported:false}).promise;update();
     byId('pdfPage').replaceChildren(...titles.map((t,i)=>{const o=document.createElement('option');o.value=String(i+1);o.textContent=(i+1)+' · '+t;return o;}));
    }
-   await render();msg('PDF editável aberto. Respostas, APPCC e pesos calculam os resultados automaticamente.');byId('pdfEditor').scrollIntoView({block:'start'});
+   await render();msg('PDF editável aberto. Respostas, criticidade e probabilidade calculam os resultados. Use F para avaliar as frases; os valores de probabilidade definidos já estão incluídos.');byId('pdfEditor').scrollIntoView({block:'start'});
   }catch(e){console.error(e);msg('Não foi possível abrir o PDF. Mantenha a internet e toque em Abrir PDF do guia novamente.');}finally{busy=false;byId('pdfEditor').inert=false;}
  }
  function iconFingerprint(button){
@@ -125,7 +137,7 @@
     if(!saved)saved={format:'guia-appcc-pdf',version,values:{},photos:{}};const f=doc.getForm();if(doc.getPageCount()!==22||!f.getFieldMaybe('p1_vazao_total')||!f.getFieldMaybe('foto_48_imagem'))throw Error('Abra um PDF editável desta revisão.');for(const field of f.getFields()){const n=field.getName();if(!(n in values))continue;let v='';if(field instanceof PDFLib.PDFTextField)v=field.getText()||'';if(field instanceof PDFLib.PDFDropdown)v=field.getSelected()[0]||'';if(field instanceof PDFLib.PDFRadioGroup)v=field.getSelected()||'Off';saved.values[n]=v;}
     incomingPdf=await pdfjs.getDocument({data:content.slice(),isEvalSupported:false}).promise;incomingBytes=content;saved.photos=await recoverImages(incomingPdf,f,saved);
    }else saved=JSON.parse(await file.text());
-   if(saved?.format!=='guia-appcc-pdf'||saved.version!==version||!saved.values)throw Error('Use um JSON ou PDF deste guia PDF editável.');
+   if(saved?.format!=='guia-appcc-pdf'||![14,version].includes(saved.version)||!saved.values)throw Error('Use um JSON ou PDF deste guia PDF editável.');
    if(!incomingPdf){incomingBytes=templateBytes.slice();incomingPdf=await pdfjs.getDocument({data:incomingBytes.slice(),isEvalSupported:false}).promise;}
    values={...metadata.defaults};for(const n of Object.keys(values))if(typeof saved.values[n]==='string')values[n]=saved.values[n];photos=validPhotos(saved.photos);if(incomingPdf){const previous=documentPDF;if(renderTask){renderTask.cancel();renderTask=null;}renderSerial++;documentPDF=incomingPdf;bytes=incomingBytes;if(previous&&previous!==incomingPdf)previous.destroy().catch(()=>{});}update();persist();await render();msg('Preenchimento aberto. Respostas, cálculos e imagens foram recuperados.');
   }catch(e){msg('O arquivo não foi aberto: '+e.message);}

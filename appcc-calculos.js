@@ -4,43 +4,43 @@ function AppccCalculate(config, values) {
  function raw(n){return values[n]==null?'':String(values[n]);}
  function answer(n){var v=raw(n).replace(/^\//,'').toUpperCase();return v==='SIM'||v==='S'?'SIM':v==='NÃO'||v==='NAO'||v==='N'?'NÃO':v==='NA'||v==='NÃO APLICÁVEL'?'NA':'';}
  function number(v){var s=String(v).trim().replace(/\s/g,'').replace('%','');if(s.indexOf(',')>=0)s=s.replace(/\./g,'').replace(',','.');var n=Number(s);return s!==''&&isFinite(n)?n:null;}
- function risk(code,pc){return pc===null?'Pendente':config.strict.indexOf(code)>=0?(pc===100?'Baixo':pc>=76?'Médio':'Alto'):(pc>=76?'Baixo':pc>=51?'Médio':'Alto');}
+ function risk(code,pc){return pc===null?'Pendente':config.strict.indexOf(code)>=0?(pc===100?'Baixo':pc>=76?'Médio':'Alto'):(pc>=76?'Baixo':pc>50?'Médio':'Alto');}
  function maxRisk(rs){if(rs.indexOf('Alto')>=0)return 'Alto';if(rs.indexOf('Pendente')>=0||rs.indexOf('Não avaliado')>=0)return 'Pendente';if(rs.indexOf('Médio')>=0)return 'Médio';if(rs.indexOf('Baixo')>=0)return 'Baixo';return 'Não aplicável';}
  for(var mi=0;mi<config.mirrors.length;mi++){values[config.mirrors[mi].target]=raw(config.mirrors[mi].source);mirrored[config.mirrors[mi].target]=true;}
  for(var gi=0;gi<config.groups.length;gi++){
-  var g=config.groups[gi], used=false, pending=false, items=[], blocks={},custom=false;
+  var g=config.groups[gi],used=false,pending=false,items=[];
   for(var mi=0;mi<g.metadata.length;mi++)if(!mirrored[g.metadata[mi]]&&raw(g.metadata[mi])&&raw(g.metadata[mi])!=='Off'&&raw(g.metadata[mi])!=='/Off')used=true;
   for(var ii=0;ii<g.items.length;ii++){
    var item=g.items[ii],v=answer(item.answer),cl=raw(item.classField),classes=cl&&cl!=='Por frase'&&cl.indexOf('Original:')!==0?[cl]:item.classes;
-   if(v)used=true;if(v==='NA')continue;if(!v)pending=true;
-   var unique=[];for(var ci=0;ci<classes.length;ci++)if(unique.indexOf(classes[ci])<0)unique.push(classes[ci]);
-   var weight=number(raw(item.weightField));if(weight!==null)custom=true;
-   var record={v:v,classes:unique,weight:weight};items.push(record);
-   for(var ci=0;ci<unique.length;ci++){var cls=unique[ci];if(!blocks[cls])blocks[cls]=[];blocks[cls].push(v==='SIM');}
+   var nc=0;for(var ci=0;ci<classes.length;ci++)nc=Math.max(nc,(config.ncLevels||{PC:1,PPR:2,PPHO:3,PPRO:4,PCC:5})[classes[ci]]||0);
+   var prob=number(raw(item.probabilityField)),valid=prob!==null&&prob>=1&&prob<=5&&Math.floor(prob)===prob;
+   var phraseRows=[];try{phraseRows=JSON.parse(raw(item.phraseField)||'[]');}catch(e){}
+   var phraseScore=null,hasPhrase=false,phrasePending=false,anyNo=false,allNA=true;
+   for(var fj=0;fj<(item.phrases||[]).length;fj++)if(phraseRows[fj]&&phraseRows[fj].v)hasPhrase=true;
+   if(hasPhrase){
+    var scored=[];
+    for(var fj=0;fj<item.phrases.length;fj++){
+     var def=item.phrases[fj],fr=phraseRows[fj]||{},fv=fr.v||'';
+     if(fv==='NA'&&def.na)continue;allNA=false;if(fv==='NÃO')anyNo=true;
+     var fp=fr.p===undefined||fr.p===''?prob:number(fr.p),fnc=(config.ncLevels||{})[def.cls]||0;
+     if(!fv||fp===null||fp<1||fp>5||Math.floor(fp)!==fp)phrasePending=true;
+     scored.push({v:fv,w:fnc*(fp||0)});
+    }
+    v=allNA?'NA':anyNo?'NÃO':phrasePending?'':'SIM';
+    phraseScore=0;for(var fj=0;fj<scored.length;fj++)if(scored[fj].v===(v==='NÃO'?'NÃO':'SIM'))phraseScore=Math.max(phraseScore,scored[fj].w);
+    values[item.answer]=v;output[item.answer]=v;
+   }
+
+   output[item.ncField]=String(nc);output[item.weightField]=valid?String(nc*prob):'';
+   if(v)used=true;if(v==='NA')continue;
+   if(!v||(hasPhrase?phrasePending:!valid))pending=true;items.push({v:v,w:hasPhrase?phraseScore:valid?nc*prob:0});
   }
   var pc=null,r='Não avaliado';
   if(used)for(var ai=0;ai<g.items.length;ai++)activeSources[g.items[ai].answer]=true;
-  if(used){
-   if(!items.length)r='Não aplicável';
-   else if(pending)r='Pendente';
-   else{
-    var earned=0,total=0,all={};
-    for(var cls in blocks){var ok=true;for(var j=0;j<blocks[cls].length;j++)if(!blocks[cls][j])ok=false;all[cls]=ok;}
-    for(var j=0;j<items.length;j++){
-     var item=items[j],w=0,got=0;
-     for(var k=0;k<item.classes.length;k++){
-      var cls=item.classes[k],part=(weights[cls]||0)/blocks[cls].length;
-      w+=part;got+=part*((cls==='PCC'||cls==='PC')?all[cls]:item.v==='SIM');
-     }
-     if(custom&&item.weight!==null){w=Math.max(0,Math.min(100,item.weight));var satisfied=item.v==='SIM';for(var k=0;k<item.classes.length;k++)if((item.classes[k]==='PCC'||item.classes[k]==='PC')&&!all[item.classes[k]])satisfied=false;got=satisfied?w:0;}
-     total+=w;earned+=got;
-    }
-    pc=total?Math.round(1000*earned/total)/10:null;r=risk(g.proc,pc);
-   }
-  }
-  output[g.percent]=pc===null?'':String(pc).replace('.',',')+'%';output[g.risk]=used?r:'';
-  results.push({group:g,pc:pc,risk:r,used:used});
+  if(used){if(!items.length)r='Não aplicável';else if(pending)r='Pendente';else{var earned=0,total=0;for(var j=0;j<items.length;j++){total+=items[j].w;if(items[j].v==='SIM')earned+=items[j].w;}pc=total?Math.round(1000*earned/total)/10:null;r=risk(g.proc,pc);}}
+  output[g.percent]=pc===null?'':String(pc).replace('.',',')+'%';output[g.risk]=used?r:'';results.push({group:g,pc:pc,risk:r,used:used});
  }
+
  for(var i=0;i<config.rows.length;i++){
   var row=config.rows[i],v='',has=false,missing=false,active=false;
   for(var j=0;j<row.sources.length;j++){if(!activeSources[row.sources[j]])continue;active=true;var a=answer(row.sources[j]);if(a==='NÃO'){v='NÃO';break;}if(!a)missing=true;else if(a==='SIM')has=true;}
